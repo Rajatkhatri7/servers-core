@@ -31,6 +31,7 @@ async def logout(request:Request, response:Response):
     session_id = request.cookies.get("session_id")
     if session_id in current_sessions:
         del current_sessions[session_id]
+        response.delete_cookie(key="session_id")
         return {"message": "Logout successful"}
     else:
         return {"message": "No active session"}
