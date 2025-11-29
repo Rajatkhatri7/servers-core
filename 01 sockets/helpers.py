@@ -50,6 +50,8 @@ def handle_request(request):
     else:
         request_dict["cookies"] = {}
 
+    #unique request id
+    request_dict["request_id"] = str(uuid.uuid4())
 
     print(f"Request received from {request_dict['headers'].get('Host', '')}")
 
@@ -60,13 +62,12 @@ def handle_login(parsed_request):
     body = parsed_request.get("body", {})
     authenticated = verify_credentials(body)
     if authenticated:
-        return 200, {"message": "Login successful"}, {"Content-Type": "application/json", "Set-Cookie": f"session_id={authenticated}"}
+        return 200, {"message": "Login successful"}, {"Content-Type": "application/json", "Set-Cookie": f"session_id={authenticated}", "X-Request-Id": parsed_request["request_id"]}
     else:
-        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
 def verify_credentials(credentials):
     username = credentials.get("username", "").strip()
     password = credentials.get("password", "").strip()
-    print(f"username: {username}, password: {password}")
     if username=="admin" and password=="tempPassword":
         session_id = str(uuid.uuid4())
         current_sessions[session_id] = {"username": username}
@@ -79,22 +80,22 @@ def handle_greet(parsed_request):
     if session_id:
         if session_id in current_sessions:
             username = current_sessions[session_id]["username"]
-            return 200, {"message": f"Hello, {username}!"}, {"Content-Type": "application/json"}
+            return 200, {"message": f"Hello, {username}!"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
         else:
-            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
     else:
-        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
 
 def handle_logout(parsed_request):
     session_id = parsed_request.get("cookies", {}).get("session_id", "")
     if session_id:
         if session_id in current_sessions:
             del current_sessions[session_id]
-            return 200, {"message": "Logout successful"}, {"Content-Type": "application/json"}
+            return 200, {"message": "Logout successful"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
         else:
-            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
     else:
-        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
 
 
 def handle_route(parsed_request):
@@ -109,7 +110,7 @@ def handle_route(parsed_request):
     elif path=="/logout" and method=="POST":
         return handle_logout(parsed_request)
     else:
-        return 404, {"message": "404 Not Found"}, {"Content-Type": "application/json"}
+        return 404, {"message": "404 Not Found"}, {"Content-Type": "application/json", "X-Request-Id": parsed_request["request_id"]}
 
 def build_respone(status, body, headers):
     
