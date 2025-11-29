@@ -10,6 +10,7 @@ STATUS_CODES = {
     401: "401 Unauthorized",
     404: "404 Not Found",
     405: "405 Method Not Allowed",
+    500: "500 Internal Server Error"
 }
 
 def handle_request(request):
@@ -19,6 +20,8 @@ def handle_request(request):
     request_lines = header_text.split("\r\n")
 
     request_dict["method"], request_dict["path"], request_dict["protocol"] = request_lines[0].split(" ")
+
+    #headers
     request_dict["headers"] = {}
     for line in request_lines[1:]:
         if line=="":
@@ -26,69 +29,94 @@ def handle_request(request):
         key, value = line.split(": ")
         request_dict["headers"][key] = value
 
-    
+    #query params
+    if "?" in request_dict["path"]:
+        request_dict["path"], query_string = request_dict["path"].split("?")
+        query_params = dict(param.split("=") for param in query_string.split("&"))
+        request_dict["query_params"] = query_params
 
+    #body
     if body.strip():
         try:
             request_dict["body"] = json.loads(body)
         except (ValueError, SyntaxError):
             return None, "400 Bad Request"
+    else:
+        request_dict["body"] = {}
+
+    #cookies
+    if "Cookie" in request_dict["headers"]:
+        request_dict["cookies"] = dict(cookie.split("=") for cookie in request_dict["headers"]["Cookie"].split(";"))
+    else:
+        request_dict["cookies"] = {}
+
 
     print(f"Request received from {request_dict['headers'].get('Host', '')}")
 
     return request_dict,None
 
+
+def handle_login(parsed_request):
+    body = parsed_request.get("body", {})
+    authenticated = verify_credentials(body)
+    if authenticated:
+        return 200, {"message": "Login successful"}, {"Content-Type": "application/json", "Set-Cookie": f"session_id={authenticated}"}
+    else:
+        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
 def verify_credentials(credentials):
     username = credentials.get("username", "").strip()
     password = credentials.get("password", "").strip()
+    print(f"username: {username}, password: {password}")
     if username=="admin" and password=="tempPassword":
         session_id = str(uuid.uuid4())
         current_sessions[session_id] = {"username": username}
         return session_id
     else:
         return False
+    
+def handle_greet(parsed_request):
+    session_id = parsed_request.get("cookies", {}).get("session_id", "")
+    if session_id:
+        if session_id in current_sessions:
+            username = current_sessions[session_id]["username"]
+            return 200, {"message": f"Hello, {username}!"}, {"Content-Type": "application/json"}
+        else:
+            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+    else:
+        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+
+def handle_logout(parsed_request):
+    session_id = parsed_request.get("cookies", {}).get("session_id", "")
+    if session_id:
+        if session_id in current_sessions:
+            del current_sessions[session_id]
+            return 200, {"message": "Logout successful"}, {"Content-Type": "application/json"}
+        else:
+            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+    else:
+        return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+
 
 def handle_route(parsed_request):
     path = parsed_request.get("path", "")
     method = parsed_request.get("method", "")
-    body = parsed_request.get("body", {})
-    cookie = parsed_request.get("headers", {}).get("Cookie", "")
 
-    query_params = {}
-    if "?" in path:
-        path, query_string = path.split("?")
-        query_params = dict(param.split("=") for param in query_string.split("&"))
-
-    if path=="/login":
-        if method!="POST":
-            return 405, {"message": "405 Method Not Allowed"}, {"Content-Type": "application/json"}
-        
-        authenticate = verify_credentials(body)
-        if authenticate:
-            return 200, {"message": "Login successful"}, {"Content-Type": "application/json", "Set-Cookie": f"session_id={authenticate}"}
-        else:
-            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
+    if path=="/login" and method=="POST":
+        return handle_login(parsed_request)
         
     elif path=="/greet" and method=="GET":
-        session_id = cookie.split("=")[1]
-        if session_id not in current_sessions:
-            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
-        
-        username = current_sessions[session_id]["username"]
-        return 200, {"message": f"Hello, {username}!"}, {"Content-Type": "application/json"}
-    
+        return handle_greet(parsed_request)
     elif path=="/logout" and method=="POST":
-        session_id = cookie.split("=")[1]
-        if session_id not in current_sessions:
-            return 401, {"message": "401 Unauthorized"}, {"Content-Type": "application/json"}
-        del current_sessions[session_id]
-        return 200, {"message": "Logout successful"}, {"Content-Type": "application/json"}
-
+        return handle_logout(parsed_request)
+    else:
+        return 404, {"message": "404 Not Found"}, {"Content-Type": "application/json"}
 
 def build_respone(status, body, headers):
     
     if body:
         body = json.dumps(body)
+    else:
+        body = {}
     default_headers = {
         "Content-Length": str(len(body))
     }

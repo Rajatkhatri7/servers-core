@@ -1,5 +1,6 @@
 import socket
-from helpers import handle_request, handle_route, build_respone
+from helpers import handle_request, build_respone
+from middleware import middleware_wrapper
 import subprocess
 import time
 
@@ -42,7 +43,7 @@ while True:
         client_socket.send(response.encode())
         client_socket.close()
         continue
-    status, body, headers = handle_route(parsed_request)
+    status, body, headers = middleware_wrapper(parsed_request)
     response = build_respone(status, body, headers)
 
     client_socket.send(response.encode())
