@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status,Request
+from fastapi import APIRouter, Depends, HTTPException, status,Request,Query
 from sqlalchemy.orm import Session
 from app.models.users import User
 from app.utilities.auth_utils import verify_user,admin_required
@@ -14,13 +14,14 @@ async def get_user_details(user: User = Depends(verify_user)):
 
 
 @router.get("/all")
-async def get_all_users(db: Session = Depends(get_db),user: User = Depends(verify_user)):
+async def get_all_users(db: Session = Depends(get_db),user: User = Depends(admin_required),page_limit:int = Query(10,ge=1,le=100),page_offset:int = Query(0,ge=0)):
     if not user.is_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized")
-    users = db.query(User).with_entities(User.id, User.email, User.username, User.is_admin).all()
+    users = db.query(User).order_by(User.id).limit(page_limit).offset(page_offset).with_entities(User.id, User.email, User.username, User.is_admin).all()
+    total_users = db.query(User).count()
 
     response = [{"id": str(user.id), "email": user.email, "username": user.username, "is_admin": user.is_admin} for user in users]
-    return response
+    return {"total":total_users,"users":response}
     
 
 @router.patch("/update_role/{user_id}")
@@ -52,7 +53,7 @@ async def update_user(request: Request,user_id: str, db: Session = Depends(get_d
     user_details = await request.json()
 
     ALLOWED_FIELDS = {"username"}
-    
+
     for field in user_details.keys():
         if field not in ALLOWED_FIELDS:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid field: {field}")
