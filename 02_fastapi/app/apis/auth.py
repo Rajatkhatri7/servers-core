@@ -1,13 +1,15 @@
-from fastapi import APIRouter
-from app.schema.auth import SignupRequest,LoginRequest
+from fastapi import APIRouter,Request
+from app.schema.auth import SignupRequest,LoginRequest,RefreshTokenRequest
 from sqlalchemy.orm import Session
 import uuid
 from app.models.users import User
 from app.db.init_db import get_db
 from fastapi import Depends,HTTPException,status
 from passlib.hash import pbkdf2_sha256
-from app.utilities.auth_utils import create_access_token,verify_user
+from app.utilities.auth_utils import create_token,verify_user,blacklist_access_token,verify_refresh_token,get_decoded_token
 from app.core.config import settings
+from app.db.init_cache import cache
+
 
 
 router = APIRouter()
@@ -40,9 +42,36 @@ async def login(request: LoginRequest,db: Session = Depends(get_db)):
     if not user or not pbkdf2_sha256.verify(password, user.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     
-    access_token = await create_access_token(data={"sub": user.email})
-    return {"message": "Login successful", "access_token": access_token, "token_type": "bearer","expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES}
+    access_token = await create_token(data={"sub": user.email},type="access",expires_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token = await create_token(data={"sub": user.email},type="refresh",expires_minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
 
-@router.get("/user/details")
-async def get_user_details(user: User = Depends(verify_user)):
-        return {"id": str(user.id), "email": user.email, "username": user.username}
+    cache.set(f"refresh_token_{str(user.id)}",refresh_token,settings.REFRESH_TOKEN_EXPIRE_MINUTES*60)
+
+    return {"message": "Login successful", "access_token": access_token, "token_type": "bearer","expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES,"refresh_token": refresh_token,"refresh_token_expires_in": settings.REFRESH_TOKEN_EXPIRE_MINUTES}
+
+@router.post("/logout")
+async def logout(request: Request,user: User = Depends(verify_user)):
+
+    cache.delete(f"refresh_token_{str(user.id)}")
+    token = request.headers.get("Authorization").split(" ")[1]
+    await blacklist_access_token(token)
+    return {"message": "Logout successful"}
+
+
+
+@router.post("/token/refresh")
+async def refresh_token(request: RefreshTokenRequest,user: User = Depends(verify_user),db: Session = Depends(get_db)):
+
+    token = request.refresh_token.strip()
+    token_verified = await verify_refresh_token(token,db)
+     
+    if token_verified is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+     
+    access_token = await create_token(data={"sub": user.email},type="access",expires_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    return {"access_token": access_token, "token_type": "bearer","expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES}
+     
+    
+@router.get("/token/decode")
+async def decode_token(token: dict = Depends(get_decoded_token)):
+    return token
