@@ -4,7 +4,7 @@ from app.db.init_cache import cache
 from app.apis import auth,user
 
 app = FastAPI()
-init_db()
+# init_db()
 
 
 

@@ -91,3 +91,7 @@ async def verify_user(token: str = Depends(oauth_scheme), db: Session = Depends(
     return user
 
 
+async def admin_required(user: User = Depends(verify_user)):
+    if user.is_admin is False:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to perform this action")
+    return user

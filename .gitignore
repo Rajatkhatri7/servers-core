@@ -1,5 +1,25 @@
+# Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Virtual environment
 venv/
 .env
+.env.*  # if using multiple environments
+
+# Database files
 *.db
+*.sqlite
+*.sqlite3
+
+# Alembic migration cache
+migrations/versions/*.pyc
+
+# Redis dump (if any)
+dump.rdb
+
+# OS junk
+.DS_Store
+.idea/
+.vscode/
