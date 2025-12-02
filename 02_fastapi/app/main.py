@@ -45,9 +45,15 @@ app.add_middleware(
 async def rate_limit_middleware(request:Request,call_next):
 
     try:
-        decode_token  = await get_decoded_token(request.headers.get("Authorization").split(" ")[1])
-        if not decode_token or decode_token.get("sub") is None:
+        access_token = request.headers.get("Authorization")
+        if not access_token:
             user_id = "anonymous"
+        else:
+            decode_token  = await get_decoded_token(access_token.split(" ")[1])
+            if not decode_token or decode_token.get("sub") is None:
+                user_id = "anonymous"
+            else:
+                user_id = decode_token.get("sub")
 
         cache_key = f"rate_limit:{user_id}"
         current_count = cache.incr(cache_key,1)

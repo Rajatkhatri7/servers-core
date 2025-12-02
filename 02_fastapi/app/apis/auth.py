@@ -38,7 +38,7 @@ async def login(request: LoginRequest,db: Session = Depends(get_db)):
     username = request.username.strip()
     password = request.password.strip()
 
-    user = db.query(User).filter(User.email == username).first()
+    user = db.query(User).with_entities(User.email,User.password,User.id).filter(User.email == username).first()
     if not user or not pbkdf2_sha256.verify(password, user.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
     

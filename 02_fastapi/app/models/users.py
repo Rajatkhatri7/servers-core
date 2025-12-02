@@ -1,4 +1,4 @@
-from sqlalchemy import Column,Integer,String,Boolean
+from sqlalchemy import Column,Integer,String,Boolean,Index
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.init_db import Base
 import uuid
@@ -13,3 +13,8 @@ class User(Base):
     password = Column(String(100))
     is_active = Column(Boolean, default=True)
     is_admin = Column(Boolean, default=False)
+
+    __table_args__ = (
+       Index("idx_users_email", email),
+       Index("idx_users_username", username),
+    )
