@@ -54,7 +54,10 @@ async def logout(request: Request,user: User = Depends(verify_user)):
 
     cache.delete(f"refresh_token_{str(user.id)}")
     token = request.headers.get("Authorization").split(" ")[1]
-    await blacklist_access_token(token)
+    try:
+        await blacklist_access_token(token)
+    except HTTPException as e:
+        print(f"Error blacklisting token : {e.detail}")
     return {"message": "Logout successful"}
 
 

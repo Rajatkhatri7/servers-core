@@ -14,7 +14,11 @@ from app.db.init_cache import cache
 oauth_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 async def get_decoded_token(token: str):
-    return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return payload
+    except JWTError:
+        return None
 
 async def create_token(data: dict, type: str,expires_minutes: int):
     to_encode = data.copy()
@@ -29,6 +33,8 @@ async def blacklist_access_token(token: str):
     try:
 
         token_payload = await get_decoded_token(token)
+        if token_payload is None:
+            return 
         jti = token_payload.get("jti")
         ttl = int(token_payload.get("exp")-datetime.now(timezone.utc).timestamp())
         if ttl>0:
@@ -44,6 +50,8 @@ async def verify_refresh_token(token: str,db: Session):
     )
     try:
         payload = await get_decoded_token(token)
+        if payload is None:
+            raise credentials_exception
         jti = payload.get("jti")
         if payload.get("type") != "refresh" or jti is None or payload.get("sub") is None:
             raise credentials_exception
@@ -73,6 +81,8 @@ async def verify_user(token: str = Depends(oauth_scheme), db: Session = Depends(
     )
     try:
         payload = await get_decoded_token(token)
+        if payload is None:
+            raise credentials_exception
 
         if payload.get("type") != "access" or payload.get("jti") is None or payload.get("sub") is None:
             raise credentials_exception
