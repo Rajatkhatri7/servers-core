@@ -8,13 +8,17 @@ from fastapi.responses import JSONResponse
 from app.utilities.auth_utils import get_decoded_token
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+import logging
+from app.core.error_handlers import regiser_exception_hanlders
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 
 app = FastAPI()
 # init_db()
-
-
 
 current_sessions = {}
 app.include_router(auth.router)
@@ -88,6 +92,8 @@ async def log_middleware(request:Request,call_next):
 
     print(f"Request ID: {x_request_id}, Method: {request.method}, Path: {request.url.path}, Status Code: {response.status_code}, Elapsed Time: {end_time - start_time}")
     return response
+
+regiser_exception_hanlders(app)
 
 @app.get("/health")
 async def health_check():

@@ -9,6 +9,8 @@ from passlib.hash import pbkdf2_sha256
 from app.utilities.auth_utils import create_token,verify_user,blacklist_access_token,verify_refresh_token,get_decoded_token
 from app.core.config import settings
 from app.db.init_cache import cache
+from app.tasks.logging import log_login_event
+from app.core.exceptions import AppException
 
 
 
@@ -34,18 +36,21 @@ async def signup(request: SignupRequest,db: Session = Depends(get_db)):
     return {"message": "User created successfully", "id": str(new_user.id), "email": new_user.email}
 
 @router.post("/login")
-async def login(request: LoginRequest,db: Session = Depends(get_db)):
-    username = request.username.strip()
-    password = request.password.strip()
+async def login(request_data: LoginRequest,request:Request, db: Session = Depends(get_db)):
+    username = request_data.username.strip()
+    password = request_data.password.strip()
 
     user = db.query(User).with_entities(User.email,User.password,User.id).filter(User.email == username).first()
     if not user or not pbkdf2_sha256.verify(password, user.password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        raise AppException(code="USER_NOT_FOUND",message="User not found",status_code=404)
     
     access_token = await create_token(data={"sub": user.email},type="access",expires_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_token = await create_token(data={"sub": user.email},type="refresh",expires_minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES)
 
     cache.set(f"refresh_token_{str(user.id)}",refresh_token,settings.REFRESH_TOKEN_EXPIRE_MINUTES*60)
+
+    log_login_event.delay(user.email,True,request.client.host)
+
 
     return {"message": "Login successful", "access_token": access_token, "token_type": "bearer","expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES,"refresh_token": refresh_token,"refresh_token_expires_in": settings.REFRESH_TOKEN_EXPIRE_MINUTES}
 
@@ -66,10 +71,7 @@ async def logout(request: Request,user: User = Depends(verify_user)):
 async def refresh_token(request: RefreshTokenRequest,user: User = Depends(verify_user),db: Session = Depends(get_db)):
 
     token = request.refresh_token.strip()
-    token_verified = await verify_refresh_token(token,db)
-     
-    if token_verified is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    user = await verify_refresh_token(token,db)
      
     access_token = await create_token(data={"sub": user.email},type="access",expires_minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {"access_token": access_token, "token_type": "bearer","expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES}

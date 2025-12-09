@@ -9,6 +9,7 @@ from app.db.init_db import get_db
 from app.models.users import User
 import uuid
 from app.db.init_cache import cache
+from app.core.exceptions import AppException
 
 
 oauth_scheme = OAuth2PasswordBearer(tokenUrl="/login")
@@ -43,10 +44,10 @@ async def blacklist_access_token(token: str):
         print(f"Error blacklisting access token: {e} at line {e.__traceback__.tb_lineno}")
 
 async def verify_refresh_token(token: str,db: Session):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid refresh token",
-        headers={"WWW-Authenticate": "Bearer"},
+    credentials_exception = AppException(
+       code="INVALID_REFRESH_TOKEN",
+        message="Invalid refresh token",
+        status_code=status.HTTP_401_UNAUTHORIZED
     )
     try:
         payload = await get_decoded_token(token)
@@ -62,7 +63,9 @@ async def verify_refresh_token(token: str,db: Session):
     email = payload.get("sub")
     user = db.query(User).filter(User.email == email).first()
     if user is None:
-        raise credentials_exception
+        raise AppException(code="USER_NOT_FOUND",
+        message="User not found",
+        status_code=status.HTTP_404_NOT_FOUND)
     elif cache.get(f"refresh_token_{str(user.id)}") is None:
         raise credentials_exception
     

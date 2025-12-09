@@ -14,6 +14,8 @@ class Settings:
     REDIS_HOST: str = os.getenv("REDIS_HOST","localhost")
     REDIS_DB: int = int(os.getenv("REDIS_DB"))
     REDIS_PORT: int = int(os.getenv("REDIS_PORT",6379))
+    CELERY_BROKER_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+    CELERY_RESULT_BACKEND: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
 
 settings = Settings()
